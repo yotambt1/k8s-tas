@@ -1,0 +1,53 @@
+name: k8s-task-platform
+
+services:
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: k8s-task-platform:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "taskplatform.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QUEUE_NAME: tasks
+      LEASE_SECONDS: "30"
+      STORAGE_DIR: /data
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - image-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: k8s-task-platform:local
+    command: ["python", "-m", "taskplatform.worker"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QUEUE_NAME: tasks
+      LEASE_SECONDS: "30"
+      STORAGE_DIR: /data
+    volumes:
+      - image-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  image-data:
