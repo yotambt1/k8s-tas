@@ -1,0 +1,6 @@
+apiVersion: v2
+name: task-platform
+description: Image-resize service (FastAPI API, Redis queue, Python worker) for a local single-node cluster.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

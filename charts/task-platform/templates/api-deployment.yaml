@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-api
+  labels:
+    {{- include "task-platform.labels" (dict "root" $ "app" "task-api" "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ int .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: task-api
+  template:
+    metadata:
+      labels:
+        app: task-api
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "task-platform.waitForRedis" . | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "task-platform.appImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["uvicorn", "taskplatform.api:app", "--host", "0.0.0.0", "--port", {{ int .Values.api.containerPort | quote }}]
+          ports:
+            - name: http
+              containerPort: {{ int .Values.api.containerPort }}
+          env:
+            {{- include "task-platform.appEnv" . | nindent 12 }}
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: image-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: image-data
+          persistentVolumeClaim:
+            claimName: {{ include "task-platform.imageDataClaim" . }}

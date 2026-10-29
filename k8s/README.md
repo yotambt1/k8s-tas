@@ -1,5 +1,12 @@
 # Run the image service on Minikube
 
+> **Being replaced by the Helm chart in [`charts/task-platform`](../charts/task-platform/).**
+> Once the deployment has been adopted by Helm
+> ([`docs/helm-migration.md`](../docs/helm-migration.md)), do **not** run
+> `kubectl apply` or `kubectl delete` with these files: they would conflict
+> with the Helm release. They stay here for reference until the migration is
+> confirmed.
+
 These manifests target a local, single-node Minikube cluster. They are kept
 separate so the storage claims, Redis, and application workloads can be read
 one piece at a time.

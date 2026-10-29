@@ -1,0 +1,49 @@
+{{- /*
+Claims are created only when no existingClaim is set. Created claims carry
+helm.sh/resource-policy: keep, so helm uninstall leaves them (and the data)
+in place. With existingClaim, the release never touches the claim.
+*/ -}}
+{{- with .Values.persistence.imageData }}
+{{- if not .existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: image-data
+  labels:
+    {{- include "task-platform.labels" (dict "root" $ "app" "image-data" "component" "storage") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml .accessModes | nindent 4 }}
+  {{- with .storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .size | quote }}
+{{- end }}
+{{- end }}
+{{- with .Values.persistence.redisData }}
+{{- if not .existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  labels:
+    {{- include "task-platform.labels" (dict "root" $ "app" "redis-data" "component" "storage") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml .accessModes | nindent 4 }}
+  {{- with .storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .size | quote }}
+{{- end }}
+{{- end }}

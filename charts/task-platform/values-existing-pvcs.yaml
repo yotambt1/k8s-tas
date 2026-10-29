@@ -1,0 +1,8 @@
+# Overlay for adopting the kubectl-managed deployment from k8s/.
+# The claims created by k8s/storage.yaml are mounted but stay outside Helm
+# ownership: this release never creates, patches or deletes them.
+persistence:
+  imageData:
+    existingClaim: image-data
+  redisData:
+    existingClaim: redis-data

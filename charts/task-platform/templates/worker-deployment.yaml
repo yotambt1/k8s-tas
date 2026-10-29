@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-worker
+  labels:
+    {{- include "task-platform.labels" (dict "root" $ "app" "task-worker" "component" "worker") | nindent 4 }}
+spec:
+  replicas: {{ int .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      app: task-worker
+  template:
+    metadata:
+      labels:
+        app: task-worker
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "task-platform.waitForRedis" . | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "task-platform.appImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "taskplatform.worker"]
+          env:
+            {{- include "task-platform.appEnv" . | nindent 12 }}
+          {{- with .Values.worker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: image-data
+              mountPath: /data
+      volumes:
+        - name: image-data
+          persistentVolumeClaim:
+            claimName: {{ include "task-platform.imageDataClaim" . }}

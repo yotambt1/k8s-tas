@@ -1,0 +1,15 @@
+task-platform {{ .Chart.AppVersion }} is deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+The API Service is ClusterIP only. For local access, keep this running:
+
+  kubectl -n {{ .Release.Namespace }} port-forward service/task-api {{ int .Values.api.service.port }}:{{ int .Values.api.service.port }}
+
+Then check: curl http://127.0.0.1:{{ int .Values.api.service.port }}/healthz
+
+Storage:
+  image-data claim: {{ include "task-platform.imageDataClaim" . }}{{ if .Values.persistence.imageData.existingClaim }} (external; not managed by this release){{ else }} (created by this release; kept on uninstall){{ end }}
+  redis-data claim: {{ include "task-platform.redisDataClaim" . }}{{ if .Values.persistence.redisData.existingClaim }} (external; not managed by this release){{ else }} (created by this release; kept on uninstall){{ end }}
+
+Warning: "helm uninstall" deletes the Deployments and Services of this release.
+To hand adopted resources back to kubectl instead, follow the rollback steps
+in docs/helm-migration.md.

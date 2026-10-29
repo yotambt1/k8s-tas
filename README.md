@@ -6,9 +6,10 @@ task ID, poll its status, then download the resized image.
 
 **Current state:** local API/worker service, input limits, shared local
 storage, reliable Redis lease/ack flow and recovery tests; a Docker image with
-Compose; Minikube manifests; and GitHub Actions CI that runs the tests and
-verifies the image build. Image publishing, Helm and GitOps are the next
-learning milestones.
+Compose; Minikube manifests and an equivalent Helm chart; and GitHub Actions
+CI that runs the tests and verifies the image build. Migrating the running
+deployment to Helm, image publishing and GitOps are the next learning
+milestones.
 
 ## Request flow
 
@@ -99,6 +100,17 @@ because Minikube is a single-node cluster. It is local cluster storage, not a
 multi-node or production storage solution; use shared RWX storage or object
 storage before moving the pods to different nodes. Deleting the Minikube
 cluster also deletes its local volumes.
+
+### Helm chart
+
+[`charts/task-platform`](charts/task-platform/) packages the same resources as
+a Helm release, with values for images, replicas, resources, Service ports,
+environment and storage. Its default render matches the `k8s/` manifests, so it
+can adopt the running kubectl deployment in place, without restarting pods;
+existing PVCs are reused through `existingClaim` and stay outside Helm
+ownership. The adoption is a step-by-step runbook with preflight checks,
+backups and rollback in [`docs/helm-migration.md`](docs/helm-migration.md);
+nothing in it runs automatically.
 
 ## Continuous integration
 

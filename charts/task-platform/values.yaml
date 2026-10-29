@@ -1,0 +1,77 @@
+# Defaults reproduce the kubectl manifests in k8s/ exactly, so the chart can
+# adopt that deployment without restarting pods. Resource names are fixed
+# (redis, task-api, task-worker, image-data, redis-data): one release per
+# namespace.
+
+# Shared by the API and the worker; only their container commands differ.
+image:
+  repository: k8s-task-platform
+  tag: local
+  pullPolicy: IfNotPresent
+
+# Pod-level security context for the API and worker pods (not Redis).
+# fsGroup makes the mounted /data volume writable by the image's app user.
+podSecurityContext:
+  fsGroup: 10001
+
+# Rendered as environment variables on both the API and the worker.
+# REDIS_URL is derived from the Redis Service name and redis.service.port.
+config:
+  queueName: tasks
+  leaseSeconds: "30"
+  storageDir: /data
+  # Additional env entries, e.g.:
+  #   - name: MAX_UPLOAD_BYTES
+  #     value: "10485760"
+  # Changing env changes the pod template and rolls the API and worker pods.
+  extraEnv: []
+
+api:
+  # With ReadWriteOnce storage, more than one replica only works while every
+  # pod runs on the same node (true on single-node Minikube).
+  replicas: 1
+  # Container port; also passed to uvicorn --port so the two cannot drift.
+  containerPort: 8000
+  service:
+    type: ClusterIP
+    port: 8000
+  # Empty = no requests or limits (current behaviour). Example:
+  #   requests: { cpu: 100m, memory: 128Mi }
+  #   limits: { memory: 256Mi }
+  resources: {}
+
+worker:
+  replicas: 1
+  # Image resizing is memory-heavy; size limits to MAX_IMAGE_PIXELS. Example:
+  #   requests: { cpu: 250m, memory: 256Mi }
+  #   limits: { memory: 1Gi }
+  resources: {}
+
+redis:
+  # Redis always runs exactly one replica: its AOF lives on one ReadWriteOnce
+  # volume. The Deployment keeps the default update strategy for now; see
+  # docs/helm-migration.md before changing the Redis pod template.
+  image:
+    repository: redis
+    tag: 8-alpine
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  resources: {}
+
+# Without existingClaim, the chart creates the claim and annotates it with
+# helm.sh/resource-policy: keep, so helm uninstall does not delete it.
+# With existingClaim, the chart only mounts that claim and never manages it.
+persistence:
+  imageData:
+    existingClaim: ""
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: "" # "" = cluster default StorageClass
+  redisData:
+    existingClaim: ""
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ""
