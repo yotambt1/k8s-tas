@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-api
+  labels:
+    app: task-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: task-api
+  template:
+    metadata:
+      labels:
+        app: task-api
+    spec:
+      securityContext:
+        fsGroup: 10001
+      initContainers:
+        - name: wait-for-redis
+          image: redis:8-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - until redis-cli -h redis -p 6379 ping >/dev/null 2>&1; do echo 'Waiting for Redis'; sleep 2; done
+      containers:
+        - name: api
+          image: k8s-task-platform:local
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "taskplatform.api:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: QUEUE_NAME
+              value: tasks
+            - name: LEASE_SECONDS
+              value: "30"
+            - name: STORAGE_DIR
+              value: /data
+          volumeMounts:
+            - name: image-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: image-data
+          persistentVolumeClaim:
+            claimName: image-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-api
+spec:
+  type: ClusterIP
+  selector:
+    app: task-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-worker
+  labels:
+    app: task-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: task-worker
+  template:
+    metadata:
+      labels:
+        app: task-worker
+    spec:
+      securityContext:
+        fsGroup: 10001
+      initContainers:
+        - name: wait-for-redis
+          image: redis:8-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - until redis-cli -h redis -p 6379 ping >/dev/null 2>&1; do echo 'Waiting for Redis'; sleep 2; done
+      containers:
+        - name: worker
+          image: k8s-task-platform:local
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "taskplatform.worker"]
+          env:
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: QUEUE_NAME
+              value: tasks
+            - name: LEASE_SECONDS
+              value: "30"
+            - name: STORAGE_DIR
+              value: /data
+          volumeMounts:
+            - name: image-data
+              mountPath: /data
+      volumes:
+        - name: image-data
+          persistentVolumeClaim:
+            claimName: image-data

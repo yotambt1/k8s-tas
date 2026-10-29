@@ -84,6 +84,20 @@ The API is available at `http://127.0.0.1:8000`. Stop the containers with
 `docker compose down`; named volumes are kept. `docker compose down -v` also
 deletes Redis and image data, so use it only when you intend to remove them.
 
+## Local Kubernetes with Minikube
+
+The `k8s/` directory contains PVCs, a Redis Deployment and internal Service,
+and separate API and Worker Deployments. The API is exposed only as a
+`ClusterIP`; use `kubectl port-forward` for local access. Step-by-step image
+loading, rollout checks and an upload/download smoke test are in
+[`k8s/README.md`](k8s/README.md).
+
+The image-data PVC is `ReadWriteOnce`: it can be shared by the API and Worker
+because Minikube is a single-node cluster. It is local cluster storage, not a
+multi-node or production storage solution; use shared RWX storage or object
+storage before moving the pods to different nodes. Deleting the Minikube
+cluster also deletes its local volumes.
+
 ## Reliability and limits
 
 - Redis Lua scripts atomically create a task record with its queue entry,
