@@ -4,9 +4,11 @@ A small image-resize service for learning how to run background work with
 FastAPI, Redis and a separate Python worker. Upload a JPEG or PNG, receive a
 task ID, poll its status, then download the resized image.
 
-**Application milestone complete:** local API/worker service, input limits,
-shared local storage, reliable Redis lease/ack flow, and recovery tests. Docker,
-Kubernetes, Helm, CI and GitOps are intentionally the next learning milestones.
+**Current state:** local API/worker service, input limits, shared local
+storage, reliable Redis lease/ack flow and recovery tests; a Docker image with
+Compose; Minikube manifests; and GitHub Actions CI that runs the tests and
+verifies the image build. Image publishing, Helm and GitOps are the next
+learning milestones.
 
 ## Request flow
 
@@ -97,6 +99,30 @@ because Minikube is a single-node cluster. It is local cluster storage, not a
 multi-node or production storage solution; use shared RWX storage or object
 storage before moving the pods to different nodes. Deleting the Minikube
 cluster also deletes its local volumes.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push to
+`main` and on every pull request, with two parallel jobs:
+
+- **Tests:** installs the pinned uv, runs `uv sync --locked` (fails if
+  `uv.lock` is stale) and `uv run pytest -v`. Tests use `fakeredis`, so no
+  Redis service is needed.
+- **Docker image:** builds the image locally on the runner, checks that it runs
+  as a non-root user and that the worker module imports, then starts the API
+  container and polls `GET /healthz`.
+
+The workflow token is read-only (`contents: read`), uses no secrets, never logs
+in to a registry, pushes no image and deploys nothing. Actions are pinned to
+full commit SHAs. The uv version is pinned in both the workflow and the
+`Dockerfile`; update them together.
+
+Reproduce the CI checks locally:
+
+```sh
+uv sync --locked && uv run pytest -v
+docker build --tag k8s-task-platform:ci .
+```
 
 ## Reliability and limits
 

@@ -1,0 +1,81 @@
+# Runs the test suite and verifies the Docker image builds and starts.
+# Read-only: no secrets, no registry login, no image push, no deployment.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Keep in sync with the uv image tag in the Dockerfile.
+          version: "0.13.5"
+          enable-cache: true
+
+      # Python 3.12 comes from .python-version. --locked fails if uv.lock is
+      # out of date with pyproject.toml instead of silently re-resolving.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest -v
+
+  docker-build:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Local build only: the image never leaves the runner.
+      - name: Build image
+        run: docker build --tag k8s-task-platform:ci .
+
+      - name: Check image runs as non-root
+        run: test "$(docker run --rm k8s-task-platform:ci id -u)" != "0"
+
+      - name: Check worker module imports
+        run: docker run --rm k8s-task-platform:ci python -c "import taskplatform.worker"
+
+      # /healthz does not touch Redis, so the API container can start alone.
+      - name: Smoke test API health endpoint
+        run: |
+          docker run --detach --name api --publish 127.0.0.1:8000:8000 k8s-task-platform:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/healthz; then
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy within 30 seconds" >&2
+          exit 1
+
+      - name: Show API logs and clean up
+        if: always()
+        run: |
+          docker logs api || true
+          docker rm --force api || true

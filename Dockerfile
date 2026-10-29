@@ -1,7 +1,8 @@
 # Build one runtime image for both the API and the worker.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Pinned for reproducible builds; keep in sync with .github/workflows/ci.yml.
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
